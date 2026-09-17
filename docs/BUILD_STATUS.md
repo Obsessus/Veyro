@@ -5,13 +5,13 @@ Update this every time a phase is completed.
 
 ---
 
-## Current Phase: 1a — Camera & 3D Tracking
+## Current Phase: 1b — Cursor Control & Adaptive Smoothing
 
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Project setup & reference repo analysis | ✅ Complete |
-| 1a | Camera + 3D tracking pipeline | 🟡 In Progress |
-| 1b | Adaptive smoothing + cursor control | ⬜ Not Started |
+| 1a | Camera + 3D tracking pipeline | ✅ Complete |
+| 1b | Adaptive smoothing + cursor control | 🟡 In Testing |
 | 1c | Velocity click detector ("snake bite") | ⬜ Not Started |
 | 1d | State machine (TRAY → SUMMONED → ARMED) | ⬜ Not Started |
 | 1e | Hotkey listener + tray process | ⬜ Not Started |
