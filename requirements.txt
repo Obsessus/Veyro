@@ -1,0 +1,21 @@
+# Core dependencies
+mediapipe>=0.10.0
+opencv-python>=4.8.0
+pynput>=1.7.6
+pyautogui>=0.9.54
+numpy>=1.24.0
+
+# System tray icon
+pystray>=0.19.4
+Pillow>=10.0.0          # Required by pystray for tray icons
+
+# Overlay UI (built last — comment out until Phase 9)
+# PyQt6>=6.5.0
+
+# Testing
+pytest>=7.4.0
+pytest-mock>=3.11.0
+
+# Dev / debug only
+# These are not needed in production
+# opencv-contrib-python   # only if extra cv2 modules needed
