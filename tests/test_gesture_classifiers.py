@@ -96,12 +96,12 @@ class TestPostureHoldDetector:
         assert detector.progress(timestamp=10.51) == 1.0
 
     def test_hold_interrupted_resets(self):
-        detector = PostureHoldDetector(GestureType.OPEN_PALM, required_seconds=0.5)
+        detector = PostureHoldDetector(GestureType.OPEN_PALM, required_seconds=0.5, grace_seconds=0.2)
         detector.update(GestureType.OPEN_PALM, timestamp=10.0)
-        detector.update(GestureType.OPEN_PALM, timestamp=10.4)  # 0.4s elapsed
+        detector.update(GestureType.OPEN_PALM, timestamp=10.3)  # 0.3s elapsed
 
-        # Posture drops
-        trig, el = detector.update(GestureType.UNKNOWN, timestamp=10.45)
+        # Posture drops for longer than grace window (0.3s > 0.2s)
+        trig, el = detector.update(GestureType.UNKNOWN, timestamp=10.6)
         assert not trig
         assert el == 0.0
-        assert detector.progress(timestamp=10.45) == 0.0
+        assert detector.progress(timestamp=10.6) == 0.0

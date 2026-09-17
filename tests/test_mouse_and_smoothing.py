@@ -34,12 +34,12 @@ class TestAdaptiveSmoother:
         assert 100.0 < x1 < 200.0
         assert 100.0 < y1 < 200.0
 
-        # After several frames of holding at 200, converges toward 200
+        # After several frames of holding at 200, converges within deadzone radius of 200
         for _ in range(30):
             x1, y1 = smoother.update(200.0, 200.0)
 
-        assert abs(x1 - 200.0) < 1.0
-        assert abs(y1 - 200.0) < 1.0
+        assert abs(x1 - 200.0) <= smoother.deadzone_pixels
+        assert abs(y1 - 200.0) <= smoother.deadzone_pixels
 
     def test_reset_clears_state(self):
         smoother = AdaptiveSmoother()

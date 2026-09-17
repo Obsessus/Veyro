@@ -58,8 +58,9 @@ ONE_EURO_BETA: float = 0.025
 ONE_EURO_D_CUTOFF: float = 1.0
 
 # Stationary Deadzone (in screen pixels):
-# Micro-movements within this radius are filtered out to keep cursor rock-steady.
-SMOOTH_DEADZONE_PIXELS: float = 6.0
+# Micro-movements within this radius (14px) are completely filtered out,
+# ensuring the cursor stays rock-solid when holding still on an icon.
+SMOOTH_DEADZONE_PIXELS: float = 14.0
 
 # Smooth transition factor when hand first appears (prevents jumping)
 SMOOTH_EASE_IN_RATE: float = 0.25
@@ -119,10 +120,10 @@ CLICK_COOLDOWN_FRAMES: int = 15
 DEBOUNCE_FRAMES: int = 8
 
 # Seconds the palm must be held to ARM the system (SUMMONED → ARMED)
-PALM_HOLD_SECONDS: float = 0.5
+PALM_HOLD_SECONDS: float = 2.0
 
 # Seconds the fist must be held to DISARM (ARMED → IDLE)
-FIST_HOLD_SECONDS: float = 0.5
+FIST_HOLD_SECONDS: float = 3.0
 
 # Seconds with no recognized gesture before auto-disarm (safety timeout)
 AUTO_DISARM_TIMEOUT: float = 10.0

@@ -126,6 +126,7 @@ class AdaptiveSmoother:
         self.filter_y = OneEuroFilter1D(min_cutoff, beta, d_cutoff)
         self.deadzone_pixels = float(deadzone_pixels)
 
+        self._history: list[Tuple[float, float]] = []
         self._current_x: Optional[float] = None
         self._current_y: Optional[float] = None
         self._is_tracking: bool = False
@@ -137,30 +138,34 @@ class AdaptiveSmoother:
         timestamp_s: Optional[float] = None,
     ) -> Tuple[float, float]:
         """
-        Smooth a 2D position input.
-
-        Args:
-            raw_x, raw_y: Target coordinates (in screen pixels).
-            timestamp_s: Optional monotonic timestamp in seconds.
-
-        Returns:
-            (smooth_x, smooth_y): Rock-steady smoothed coordinates.
+        Smooth a 2D position input using multi-stage stabilization:
+          Stage 1: 3-frame rolling average (absorbs MediaPipe sub-pixel jitter)
+          Stage 2: Stationary deadzone (locks pointer when holding still on an icon)
+          Stage 3: One-Euro velocity-adaptive filter (dynamic responsive smoothing)
         """
         t = timestamp_s if timestamp_s is not None else time.monotonic()
 
-        # 1. Initial frame or recovery from tracking loss
+        # Stage 1: Rolling average pre-filter
+        self._history.append((raw_x, raw_y))
+        if len(self._history) > 3:
+            self._history.pop(0)
+
+        target_x = sum(p[0] for p in self._history) / len(self._history)
+        target_y = sum(p[1] for p in self._history) / len(self._history)
+
+        # Initial frame or recovery from tracking loss
         if self._current_x is None or self._current_y is None:
-            self._current_x = raw_x
-            self._current_y = raw_y
-            self.filter_x.filter(raw_x, t)
-            self.filter_y.filter(raw_y, t)
+            self._current_x = target_x
+            self._current_y = target_y
+            self.filter_x.filter(target_x, t)
+            self.filter_y.filter(target_y, t)
             self._is_tracking = True
-            return raw_x, raw_y
+            return target_x, target_y
 
         # If tracking was briefly paused, smoothly glide towards new target
         if not self._is_tracking:
-            self._current_x += (raw_x - self._current_x) * SMOOTH_EASE_IN_RATE
-            self._current_y += (raw_y - self._current_y) * SMOOTH_EASE_IN_RATE
+            self._current_x += (target_x - self._current_x) * SMOOTH_EASE_IN_RATE
+            self._current_y += (target_y - self._current_y) * SMOOTH_EASE_IN_RATE
             self.filter_x.reset()
             self.filter_y.reset()
             self.filter_x.filter(self._current_x, t)
@@ -168,14 +173,14 @@ class AdaptiveSmoother:
             self._is_tracking = True
             return self._current_x, self._current_y
 
-        # 2. Pixel deadzone: ignore micro-tremors below threshold
-        dist = math.hypot(raw_x - self._current_x, raw_y - self._current_y)
+        # Stage 2: Pixel deadzone (eradicates physiological hand tremor)
+        dist = math.hypot(target_x - self._current_x, target_y - self._current_y)
         if dist < self.deadzone_pixels:
             return self._current_x, self._current_y
 
-        # 3. One-Euro dynamic filter
-        smooth_x = self.filter_x.filter(raw_x, t)
-        smooth_y = self.filter_y.filter(raw_y, t)
+        # Stage 3: One-Euro dynamic filter
+        smooth_x = self.filter_x.filter(target_x, t)
+        smooth_y = self.filter_y.filter(target_y, t)
 
         self._current_x = smooth_x
         self._current_y = smooth_y
@@ -190,5 +195,6 @@ class AdaptiveSmoother:
         self._current_x = None
         self._current_y = None
         self._is_tracking = False
+        self._history.clear()
         self.filter_x.reset()
         self.filter_y.reset()

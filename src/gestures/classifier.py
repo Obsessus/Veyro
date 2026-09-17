@@ -112,7 +112,15 @@ class GestureClassifier:
         if states["pinky"]:
             bitmask |= 1 << 0
 
-        # Pattern Recognition
+        # Count curled fingers using knuckle proximity
+        curled_count = 0
+        for name, (tip_i, pip_i, mcp_i) in fingers.items():
+            d_tip_mcp = self._dist_3d(landmarks_3d[tip_i], landmarks_3d[mcp_i])
+            if d_tip_mcp < 0.065:
+                curled_count += 1
+
+        # Hand span: max distance from wrist to any non-thumb fingertip
+        max_span = max(self._dist_3d(landmarks_3d[t], wrist) for t in [8, 12, 16, 20])
         num_extended_4 = sum([states["index"], states["middle"], states["ring"], states["pinky"]])
 
         # 1. OPEN PALM: All 4 non-thumb fingers extended + thumb open
@@ -132,8 +140,8 @@ class GestureClassifier:
                 finger_states=states,
             )
 
-        # 2. FIST: All 4 fingers curled into palm
-        if num_extended_4 == 0:
+        # 2. FIST: All 4 fingers curled OR compact span with at least 3 curled
+        if num_extended_4 == 0 or (curled_count >= 3 and max_span < 0.125):
             return GestureResult(
                 label=GestureType.FIST,
                 confidence=0.95,
@@ -170,14 +178,16 @@ class GestureClassifier:
 
 class PostureHoldDetector:
     """
-    Measures duration of held postures to trigger deliberate state transitions.
-    (e.g., Open Palm held for 0.5s -> Activate; Fist held for 3.0s -> Deactivate)
+    Measures duration of held postures with a grace window.
+    Prevents single-frame tracking flickers from instantly wiping progress.
     """
 
-    def __init__(self, target_posture: GestureType, required_seconds: float) -> None:
+    def __init__(self, target_posture: GestureType, required_seconds: float, grace_seconds: float = 0.45) -> None:
         self.target_posture = target_posture
         self.required_seconds = float(required_seconds)
+        self.grace_seconds = float(grace_seconds)
         self._start_time: Optional[float] = None
+        self._last_seen_time: Optional[float] = None
         self._triggered: bool = False
 
     def update(self, current_posture: GestureType, timestamp: Optional[float] = None) -> Tuple[bool, float]:
@@ -187,16 +197,25 @@ class PostureHoldDetector:
             if self._start_time is None:
                 self._start_time = now
                 self._triggered = False
-
+            self._last_seen_time = now
             elapsed = now - self._start_time
             if elapsed >= self.required_seconds and not self._triggered:
                 self._triggered = True
                 return True, elapsed
             return False, elapsed
         else:
-            self._start_time = None
-            self._triggered = False
-            return False, 0.0
+            # Check if within grace window (e.g. camera dropped a frame or brief jitter)
+            if self._last_seen_time is not None and (now - self._last_seen_time) < self.grace_seconds:
+                elapsed = now - self._start_time
+                if elapsed >= self.required_seconds and not self._triggered:
+                    self._triggered = True
+                    return True, elapsed
+                return False, elapsed
+            else:
+                self._start_time = None
+                self._last_seen_time = None
+                self._triggered = False
+                return False, 0.0
 
     def progress(self, timestamp: Optional[float] = None) -> float:
         """Return held progress fraction from 0.0 to 1.0."""
@@ -207,4 +226,5 @@ class PostureHoldDetector:
 
     def reset(self) -> None:
         self._start_time = None
+        self._last_seen_time = None
         self._triggered = False

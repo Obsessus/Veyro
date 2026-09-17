@@ -28,7 +28,12 @@ import numpy as np
 from src.actions.mouse import MouseController
 from src.capture.camera import Camera
 from src.gestures.classifier import GestureClassifier, GestureType, PostureHoldDetector
-from src.gestures.config import FRAME_REDUCTION_X, FRAME_REDUCTION_Y
+from src.gestures.config import (
+    FIST_HOLD_SECONDS,
+    FRAME_REDUCTION_X,
+    FRAME_REDUCTION_Y,
+    PALM_HOLD_SECONDS,
+)
 
 
 HAND_CONNECTIONS = [
@@ -64,14 +69,14 @@ def main():
     print("=" * 65)
     print("Veyro — Upgraded Cursor Control & Posture Gating")
     print("=" * 65)
-    print("• Show OPEN PALM (held 0.5s) to ACTIVATE tracking.")
-    print("• Steer cursor with your INDEX FINGER (butter-smooth 1€ filter).")
-    print("• Make a FIST (held ~3.0s) to DEACTIVATE tracking.")
+    print(f"• Show OPEN PALM (held {PALM_HOLD_SECONDS:.1f}s) to ACTIVATE tracking.")
+    print("• Steer cursor with your INDEX FINGER (butter-smooth multi-stage filter).")
+    print(f"• Make a FIST (held {FIST_HOLD_SECONDS:.1f}s) to DEACTIVATE tracking.")
     print("• Press [Q] to quit, or [SPACE] for quick manual toggle.\n")
 
     classifier = GestureClassifier()
-    palm_activator = PostureHoldDetector(GestureType.OPEN_PALM, required_seconds=0.5)
-    fist_deactivator = PostureHoldDetector(GestureType.FIST, required_seconds=3.0)
+    palm_activator = PostureHoldDetector(GestureType.OPEN_PALM, required_seconds=PALM_HOLD_SECONDS)
+    fist_deactivator = PostureHoldDetector(GestureType.FIST, required_seconds=FIST_HOLD_SECONDS)
 
     mouse = MouseController()
     is_active = False
