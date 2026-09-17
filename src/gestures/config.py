@@ -44,22 +44,25 @@ MIN_DETECTION_CONFIDENCE: float = 0.7
 MIN_TRACKING_CONFIDENCE: float = 0.6
 
 # ──────────────────────────────────────────────
-# SMOOTHING (cursor jitter reduction)
+# SMOOTHING (Cursor Jitter Elimination & Butter-Smooth Tracking)
 # ──────────────────────────────────────────────
 
-# Adaptive EMA — alpha is velocity-weighted between these two bounds.
-# MIN_ALPHA: heavy smoothing when hand is still (precision mode)
-# MAX_ALPHA: light smoothing when hand moves fast (responsiveness mode)
-SMOOTH_ALPHA_MIN: float = 0.08
-SMOOTH_ALPHA_MAX: float = 0.75
+# One-Euro Filter Parameters:
+# Lower MIN_CUTOFF = heavier smoothing when stationary (eradicates hand tremor).
+ONE_EURO_MIN_CUTOFF: float = 0.4
 
-# Hand speed (pixels/frame) at which smoothing switches from min→max alpha.
-# Below this = precision zone. Above = responsive zone.
-SMOOTH_SPEED_THRESHOLD: float = 25.0
+# BETA: Velocity coefficient. Higher = zero lag during fast movement.
+ONE_EURO_BETA: float = 0.025
 
-# Micro-tremor deadzone: cursor does not update if hand moves less than this
-# (in normalized screen units, approx 0.002 = ~2px on 1080p)
-SMOOTH_DEADZONE: float = 0.002
+# D_CUTOFF (Hz): Cutoff frequency for velocity derivative calculation.
+ONE_EURO_D_CUTOFF: float = 1.0
+
+# Stationary Deadzone (in screen pixels):
+# Micro-movements within this radius are filtered out to keep cursor rock-steady.
+SMOOTH_DEADZONE_PIXELS: float = 6.0
+
+# Smooth transition factor when hand first appears (prevents jumping)
+SMOOTH_EASE_IN_RATE: float = 0.25
 
 # ──────────────────────────────────────────────
 # SCREEN MAPPING

@@ -1,17 +1,16 @@
 """
-Veyro — Phase 1b: Live Cursor Control Test
-==========================================
-Tests index-finger pointer tracking with adaptive velocity smoothing.
-
-Features in this test:
-  - Draws a yellow bounding box showing the camera active tracking zone.
-    (Moving your fingertip to the edges of this box reaches the edges of your screen).
-  - Your Windows mouse cursor follows your index fingertip in real-time.
-  - Live HUD displays mapped Screen Coordinates (X, Y) and FPS.
+Veyro — Phase 1b: Upgraded Smooth Cursor & State Activation Test
+=================================================================
+Incorporates user feedback:
+  1. Open Palm (5 fingers up) held for 0.5s -> ACTIVATES tracking.
+  2. Fist held for ~3.0s -> DEACTIVATES tracking (freezes cursor).
+  3. One-Euro Filter (1€) + Screen-Pixel Deadzone -> Eliminates hand trembling.
+  4. Glowing Reticle indicator on active index fingertip.
+  5. Ease-in glide -> Eliminates abrupt cursor teleportation/jumping.
 
 Controls:
-  SPACE — Toggle mouse control ON / OFF (useful if you want to pause movement)
-  Q     — Quit test
+  [Q] — Quit test
+  [SPACE] — Manual override toggle (Activate / Standby)
 
 Run with:
   .\\.venv\\Scripts\\python.exe test_cursor.py
@@ -28,10 +27,10 @@ import numpy as np
 
 from src.actions.mouse import MouseController
 from src.capture.camera import Camera
+from src.gestures.classifier import GestureClassifier, GestureType, PostureHoldDetector
 from src.gestures.config import FRAME_REDUCTION_X, FRAME_REDUCTION_Y
-from src.tracking.mediapipe_tracker import HandTracker
 
-# Skeleton connections for 21-landmark hand
+
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),           # thumb
     (0, 5), (5, 6), (6, 7), (7, 8),           # index
@@ -42,85 +41,142 @@ HAND_CONNECTIONS = [
 ]
 
 
-def draw_hand_and_bounds(frame_bgr: np.ndarray, landmarks_2d, width: int, height: int):
-    # 1. Draw Active Workspace Bounding Box (yellow)
-    x1, y1 = FRAME_REDUCTION_X, FRAME_REDUCTION_Y
-    x2, y2 = max(x1 + 10, width - FRAME_REDUCTION_X), max(y1 + 10, height - FRAME_REDUCTION_Y)
-    cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 220, 255), 2)
-    cv2.putText(frame_bgr, "Active Screen Area", (x1 + 5, y1 - 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 220, 255), 1)
+def draw_glow_circle(img: np.ndarray, center: tuple[int, int], radius: int, color: tuple[int, int, int]):
+    """Draw a futuristic dual-ring glowing cursor reticle."""
+    # Outer soft glow ring
+    cv2.circle(img, center, radius + 6, color, 1, cv2.LINE_AA)
+    # Inner solid ring
+    cv2.circle(img, center, radius, color, 2, cv2.LINE_AA)
+    # Center target dot
+    cv2.circle(img, center, 3, (255, 255, 255), -1)
 
-    if not landmarks_2d:
-        return None
 
-    pts = [(int(lm.x * width), int(lm.y * height)) for lm in landmarks_2d]
-
-    # Draw connections
-    for s, e in HAND_CONNECTIONS:
-        cv2.line(frame_bgr, pts[s], pts[e], (0, 180, 255), 2)
-
-    # Draw landmark dots
-    for i, pt in enumerate(pts):
-        color = (0, 255, 0) if i == 8 else (220, 220, 220)
-        cv2.circle(frame_bgr, pt, 6 if i == 8 else 3, color, -1)
-
-    # Return index fingertip camera coordinate
-    return pts[8]
+def draw_progress_bar(img: np.ndarray, x: int, y: int, w: int, h: int, progress: float, color: tuple[int, int, int]):
+    """Draw a sleek progress indicator bar."""
+    cv2.rectangle(img, (x, y), (x + w, y + h), (50, 50, 50), -1)
+    fill_w = int(w * min(1.0, max(0.0, progress)))
+    if fill_w > 0:
+        cv2.rectangle(img, (x, y), (x + fill_w, y + h), color, -1)
+    cv2.rectangle(img, (x, y), (x + w, y + h), (180, 180, 180), 1)
 
 
 def main():
-    print("=" * 60)
-    print("Veyro — Phase 1b: Live Cursor Movement Test")
-    print("=" * 60)
-    print("• Point your index finger to steer the mouse cursor.")
-    print("• Press [SPACE] to toggle cursor control ON / OFF.")
-    print("• Press [Q] to quit.\n")
+    print("=" * 65)
+    print("Veyro — Upgraded Cursor Control & Posture Gating")
+    print("=" * 65)
+    print("• Show OPEN PALM (held 0.5s) to ACTIVATE tracking.")
+    print("• Steer cursor with your INDEX FINGER (butter-smooth 1€ filter).")
+    print("• Make a FIST (held ~3.0s) to DEACTIVATE tracking.")
+    print("• Press [Q] to quit, or [SPACE] for quick manual toggle.\n")
 
-    tracker = HandTracker()
+    classifier = GestureClassifier()
+    palm_activator = PostureHoldDetector(GestureType.OPEN_PALM, required_seconds=0.5)
+    fist_deactivator = PostureHoldDetector(GestureType.FIST, required_seconds=3.0)
+
     mouse = MouseController()
-    control_enabled = True
+    is_active = False
     fps_times = []
 
-    win_name = "Veyro — Phase 1b (Cursor Control)"
+    win_name = "Veyro — Smooth Cursor & Posture Control"
     cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(win_name, 960, 540)
 
+    # Import tracker here
+    from src.tracking.mediapipe_tracker import HandTracker
+    tracker = HandTracker()
+
     with Camera() as cam:
-        # Update camera size dynamically based on actual stream dimensions
         mouse.camera_width = cam.width
         mouse.camera_height = cam.height
 
         for rgb_frame, ts_ms in cam.frames():
+            now = time.monotonic()
             tracker.process_frame(rgb_frame, ts_ms)
             bgr = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
 
+            # Draw Active Screen Zone boundary
+            x1, y1 = FRAME_REDUCTION_X, FRAME_REDUCTION_Y
+            x2, y2 = max(x1 + 10, cam.width - FRAME_REDUCTION_X), max(y1 + 10, cam.height - FRAME_REDUCTION_Y)
+            boundary_color = (0, 255, 120) if is_active else (80, 80, 80)
+            cv2.rectangle(bgr, (x1, y1), (x2, y2), boundary_color, 2)
+
             data = tracker.latest
+            current_posture = GestureType.UNKNOWN
             cursor_pos = None
 
-            if data and data.landmarks_2d:
-                index_pt = draw_hand_and_bounds(bgr, data.landmarks_2d, cam.width, cam.height)
-                if index_pt and control_enabled:
-                    # Move desktop cursor
-                    cursor_pos = mouse.move_to(float(index_pt[0]), float(index_pt[1]))
-            else:
-                mouse.reset()
+            if data and data.landmarks_2d and data.landmarks_3d:
+                # 1. Classify hand posture
+                gesture_res = classifier.classify(data.landmarks_3d, data.landmarks_2d)
+                current_posture = gesture_res.label
 
-            # FPS
-            now = time.monotonic()
+                # 2. Draw Hand Skeleton
+                pts = [(int(lm.x * cam.width), int(lm.y * cam.height)) for lm in data.landmarks_2d]
+                for s, e in HAND_CONNECTIONS:
+                    cv2.line(bgr, pts[s], pts[e], (180, 150, 50), 1, cv2.LINE_AA)
+
+                for i, pt in enumerate(pts):
+                    cv2.circle(bgr, pt, 2, (200, 200, 200), -1)
+
+                index_tip_pt = pts[8]
+
+                # 3. State Transitions:
+                if not is_active:
+                    # Check for Open Palm activation
+                    triggered, elapsed = palm_activator.update(current_posture, now)
+                    if triggered:
+                        is_active = True
+                        mouse.reset()
+                        palm_activator.reset()
+                else:
+                    # Check for Fist deactivation
+                    triggered, elapsed = fist_deactivator.update(current_posture, now)
+                    if triggered:
+                        is_active = False
+                        mouse.reset()
+                        fist_deactivator.reset()
+
+                    # 4. If Active, steer mouse pointer
+                    if is_active:
+                        draw_glow_circle(bgr, index_tip_pt, 12, (0, 255, 255))
+                        cursor_pos = mouse.move_to(float(index_tip_pt[0]), float(index_tip_pt[1]))
+            else:
+                mouse.smoother.pause()
+                palm_activator.reset()
+                fist_deactivator.reset()
+
+            # FPS calculation
             fps_times.append(now)
             fps_times = [t for t in fps_times if now - t < 1.0]
             fps = len(fps_times)
 
-            # Top overlay banner
-            status_text = "CURSOR: ACTIVE (Move Hand)" if control_enabled else "CURSOR: PAUSED (Press Space)"
-            status_color = (0, 255, 0) if control_enabled else (0, 165, 255)
-            cv2.putText(bgr, status_text, (15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-            cv2.putText(bgr, f"FPS: {fps}", (15, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            # ── HUD OVERLAY ──────────────────────────────────────────────
+            if is_active:
+                status_title = "STATUS: ARMED & TRACKING"
+                status_bg = (0, 180, 50)
+            else:
+                status_title = "STATUS: STANDBY (Show Palm to Arm)"
+                status_bg = (50, 50, 180)
 
-            if cursor_pos:
-                cv2.putText(bgr, f"Screen: ({cursor_pos[0]}, {cursor_pos[1]})", (15, 90),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            cv2.rectangle(bgr, (10, 10), (420, 110), (20, 20, 20), -1)
+            cv2.rectangle(bgr, (10, 10), (420, 110), status_bg, 2)
 
+            cv2.putText(bgr, status_title, (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_bg, 2)
+            cv2.putText(bgr, f"Posture: {current_posture.value}", (20, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+
+            # Show activation / deactivation hold progress
+            if not is_active and current_posture == GestureType.OPEN_PALM:
+                prog = palm_activator.progress(now)
+                cv2.putText(bgr, f"Arming... {int(prog * 100)}%", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                draw_progress_bar(bgr, 160, 83, 240, 14, prog, (0, 255, 255))
+            elif is_active and current_posture == GestureType.FIST:
+                prog = fist_deactivator.progress(now)
+                cv2.putText(bgr, f"Disarming... {int(prog * 100)}%", (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 80, 255), 1)
+                draw_progress_bar(bgr, 160, 83, 240, 14, prog, (0, 80, 255))
+            elif cursor_pos:
+                cv2.putText(bgr, f"Screen: ({cursor_pos[0]}, {cursor_pos[1]})", (20, 95),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 255, 180), 1)
+
+            cv2.putText(bgr, f"FPS: {fps}", (cam.width - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
             cv2.putText(bgr, "[SPACE] Toggle  |  [Q] Quit", (15, cam.height - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
 
@@ -130,8 +186,10 @@ def main():
             if key == ord('q'):
                 break
             elif key == ord(' '):
-                control_enabled = not control_enabled
+                is_active = not is_active
                 mouse.reset()
+                palm_activator.reset()
+                fist_deactivator.reset()
 
     tracker.stop()
     cv2.destroyAllWindows()
