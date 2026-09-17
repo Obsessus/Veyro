@@ -16,16 +16,15 @@ Confirmed working environment:
 # CAMERA
 # ──────────────────────────────────────────────
 
-# OpenCV device index. DroidCam confirmed at index 1.
-# Change to 0 for built-in webcam.
-CAMERA_INDEX: int = 1
+# OpenCV device index. DroidCam is at index 0 (MSMF).
+CAMERA_INDEX: int = 0
 
-# Capture resolution (must match DroidCam stream resolution)
-CAMERA_WIDTH: int = 1280
-CAMERA_HEIGHT: int = 720
+# Capture resolution (DroidCam default is 640x480 or HD 1280x720)
+CAMERA_WIDTH: int = 640
+CAMERA_HEIGHT: int = 480
 
-# Use DirectShow backend on Windows for lowest latency
-USE_DSHOW: bool = True
+# Use DirectShow backend on Windows (set False for DroidCam which uses MSMF)
+USE_DSHOW: bool = False
 
 # ──────────────────────────────────────────────
 # MEDIAPIPE

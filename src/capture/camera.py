@@ -48,6 +48,10 @@ class Camera:
         backend = cv2.CAP_DSHOW if USE_DSHOW else cv2.CAP_ANY
         self._cap = cv2.VideoCapture(CAMERA_INDEX, backend)
 
+        # Fallback if primary backend fails to open
+        if not self._cap.isOpened() and backend != cv2.CAP_ANY:
+            self._cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_ANY)
+
         if not self._cap.isOpened():
             raise RuntimeError(
                 f"Could not open camera at index {CAMERA_INDEX}. "
