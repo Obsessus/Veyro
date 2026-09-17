@@ -140,7 +140,8 @@ class HandTracker:
             # Take the first detected hand only (MAX_NUM_HANDS=1)
             lm_2d = result.hand_landmarks[0]
             lm_3d = result.hand_world_landmarks[0]
-            hand_side = result.handedness[0][0].display_name  # 'Left' or 'Right'
+            cat = result.handedness[0][0]
+            hand_side = getattr(cat, "category_name", "") or getattr(cat, "display_name", "") or "Unknown"
 
             self._latest = HandData(
                 landmarks_2d=lm_2d,

@@ -5,12 +5,12 @@ Update this every time a phase is completed.
 
 ---
 
-## Current Phase: 0 — Setup
+## Current Phase: 1a — Camera & 3D Tracking
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Project setup & reference repo analysis | 🟡 In Progress |
-| 1a | Camera + 3D tracking pipeline | ⬜ Not Started |
+| 0 | Project setup & reference repo analysis | ✅ Complete |
+| 1a | Camera + 3D tracking pipeline | 🟡 In Progress |
 | 1b | Adaptive smoothing + cursor control | ⬜ Not Started |
 | 1c | Velocity click detector ("snake bite") | ⬜ Not Started |
 | 1d | State machine (TRAY → SUMMONED → ARMED) | ⬜ Not Started |
