@@ -1,4 +1,4 @@
-# Contributing to AirControl
+# Contributing to Veyro
 
 First off — thanks for wanting to contribute. This is a real tool built for a real use case, and every improvement matters.
 
@@ -32,8 +32,8 @@ Check the current phase status in [`docs/BUILD_STATUS.md`](docs/BUILD_STATUS.md)
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/aircontrol.git
-cd aircontrol
+git clone https://github.com/YOUR_USERNAME/Veyro.git
+cd Veyro
 
 # 2. Create a virtual environment
 python -m venv .venv

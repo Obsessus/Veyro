@@ -1,6 +1,6 @@
 <div align="center">
 
-# ✋ AirControl
+# ✋ Veyro
 
 ### Gesture-controlled mouse — summoned in a second, gone when you're done.
 
@@ -42,13 +42,13 @@ Jab forward fast → click (skip that ad)
 Make a fist → overlay disappears, camera off
 ```
 
-AirControl is **not** a mouse replacement. It's a temporary override — you summon it, do one thing, dismiss it. Then it's completely gone. No camera running in the background. No CPU usage. Nothing.
+Veyro is **not** a mouse replacement. It's a temporary override — you summon it, do one thing, dismiss it. Then it's completely gone. No camera running in the background. No CPU usage. Nothing.
 
 ---
 
 ## Why This Is Different From Every Other Gesture Mouse
 
-| Every other gesture mouse project | AirControl |
+| Every other gesture mouse project | Veyro |
 |---|---|
 | Always-on — camera runs the entire session | **Camera is OFF until you summon it** |
 | Acts on any hand movement it sees | **Three-stage gate: Hotkey → Palm → Gesture** |
@@ -146,7 +146,7 @@ Every existing gesture mouse uses one of:
 - **Dwell** (hold still for 0.8s) — too slow for "skip ad" scenarios
 - **Two-finger tap** — unintuitive
 
-AirControl uses **velocity-based click detection** — not found in any reference implementation:
+Veyro uses **velocity-based click detection** — not found in any reference implementation:
 
 ```
 Track index fingertip position every frame
@@ -173,7 +173,7 @@ Standard gesture mice use 2D landmark tracking. 2D cannot tell the difference be
 
 These look identical in 2D. The detector gets confused constantly.
 
-AirControl uses MediaPipe's `hand_world_landmarks` — **3D coordinates in meters, wrist-relative**:
+Veyro uses MediaPipe's `hand_world_landmarks` — **3D coordinates in meters, wrist-relative**:
 - Full X, Y, Z information
 - Scale-invariant (same values at 30cm or 80cm from camera)
 - Every gesture threshold computed in 3D world space
@@ -233,7 +233,7 @@ The hotkey needs to be pressable with **oily hands** — no precise finger place
 ## Repository Structure
 
 ```
-aircontrol/
+Veyro/
 ├── src/
 │   ├── capture/
 │   │   └── camera.py              # OpenCV capture abstraction (webcam or DroidCam identical)
@@ -326,13 +326,13 @@ Seven open-source gesture mouse projects were studied before any design decision
 
 Full analysis: [`docs/reference_repo_analysis.md`](docs/reference_repo_analysis.md)
 
-**Common gap across all seven:** None implement velocity-based click detection. None implement the full three-stage Hotkey → Palm → Gesture state machine. These are AirControl's original contributions.
+**Common gap across all seven:** None implement velocity-based click detection. None implement the full three-stage Hotkey → Palm → Gesture state machine. These are Veyro's original contributions.
 
 ---
 
 ## Camera Setup (DroidCam / IP Webcam)
 
-AirControl treats DroidCam and IP Webcam as standard OpenCV video capture devices — no phone-specific code in the core logic.
+Veyro treats DroidCam and IP Webcam as standard OpenCV video capture devices — no phone-specific code in the core logic.
 
 **Setup:**
 1. Install DroidCam on your phone and PC: [droidcam.app](https://www.droidcam.app)

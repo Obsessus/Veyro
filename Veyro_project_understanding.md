@@ -1,4 +1,4 @@
-# AirControl — Finalized Product Vision
+# Veyro — Finalized Product Vision
 **Version:** 3.0 — Vision locked
 **Updated:** 2026-09-17
 **Status:** Vision confirmed. No code written yet.
