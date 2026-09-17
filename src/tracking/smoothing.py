@@ -1,20 +1,15 @@
 """
-Veyro — Adaptive One-Euro Smoothing & Jitter Elimination
-=========================================================
-Implements the 1€ (One-Euro) Filter with pixel-scale deadzone and ease-in glide.
+Veyro — Fluid Damped Glide & Jitter Elimination
+=================================================
+Combines exponential continuous spring damping with Hermite soft-deadzone attenuation.
 
-Why the 1€ Filter?
-  - At low/zero speed (stationary hand):
-    Cutoff frequency drops to MIN_CUTOFF (~0.4 Hz), heavily attenuating
-    human physiological hand tremors (~8-12 Hz). The pointer locks solidly in place.
-  - At high speed (deliberate sweep):
-    Cutoff frequency dynamically scales up via BETA * velocity, providing
-    instantaneous, zero-lag pointer tracking.
-
-Additionally:
-  - SMOOTH_DEADZONE_PIXELS: suppresses micro-tremors below threshold.
-  - Ease-in tracking: when hand appears, smoothly glides cursor instead
-    of abruptly teleporting/jumping across the screen.
+Why this beats fixed deadzones and box filters:
+  - Box filters introduce a 100ms phase delay (lag/sluggishness).
+  - Hard deadzones create a "sticky" threshold barrier where cursor is glued in mud.
+  - Fluid Damping uses continuous exponential relaxation (1 - exp(-damping * dt)),
+    giving that cinematic, butter-smooth "Codex"-style glide while reaching targets in 2-3 frames.
+  - Hermite soft deadzone attenuates micro-tremors with a smooth cubic S-curve,
+    completely absorbing human physiological hand shake without sudden friction jerks.
 """
 
 from __future__ import annotations
@@ -24,111 +19,31 @@ import time
 from typing import Optional, Tuple
 
 from src.gestures.config import (
-    ONE_EURO_BETA,
-    ONE_EURO_D_CUTOFF,
-    ONE_EURO_MIN_CUTOFF,
-    SMOOTH_DEADZONE_PIXELS,
+    FLUID_BASE_DAMPING,
+    FLUID_MAX_DAMPING,
+    FLUID_SOFT_DEADZONE,
     SMOOTH_EASE_IN_RATE,
 )
 
 
-class LowPassFilter:
-    """First-order low-pass exponential smoothing filter."""
-
-    def __init__(self, alpha: float = 0.5) -> None:
-        self._alpha = alpha
-        self._y: Optional[float] = None
-
-    def filter(self, x: float, alpha: Optional[float] = None) -> float:
-        if alpha is not None:
-            self._alpha = alpha
-        if self._y is None:
-            self._y = x
-        else:
-            self._y = self._alpha * x + (1.0 - self._alpha) * self._y
-        return self._y
-
-    def reset(self) -> None:
-        self._y = None
-
-
-class OneEuroFilter1D:
-    """1D implementation of the 1€ filter by Géry Casiez et al."""
-
-    def __init__(
-        self,
-        min_cutoff: float = ONE_EURO_MIN_CUTOFF,
-        beta: float = ONE_EURO_BETA,
-        d_cutoff: float = ONE_EURO_D_CUTOFF,
-    ) -> None:
-        self.min_cutoff = float(min_cutoff)
-        self.beta = float(beta)
-        self.d_cutoff = float(d_cutoff)
-
-        self._x_filter = LowPassFilter()
-        self._dx_filter = LowPassFilter()
-        self._t_prev: Optional[float] = None
-        self._x_prev: Optional[float] = None
-
-    @staticmethod
-    def _compute_alpha(rate: float, cutoff: float) -> float:
-        tau = 1.0 / (2.0 * math.pi * cutoff)
-        te = 1.0 / rate
-        return 1.0 / (1.0 + tau / te)
-
-    def filter(self, x: float, t: float) -> float:
-        if self._t_prev is None:
-            self._t_prev = t
-            self._x_prev = x
-            return self._x_filter.filter(x, 1.0)
-
-        dt = t - self._t_prev
-        if dt <= 0.0:
-            dt = 1e-4
-
-        rate = 1.0 / dt
-
-        # Estimate derivative of the signal
-        dx = (x - self._x_prev) * rate
-        edx = self._dx_filter.filter(dx, self._compute_alpha(rate, self.d_cutoff))
-
-        # Adaptive cutoff based on rate of change
-        cutoff = self.min_cutoff + self.beta * abs(edx)
-        alpha = self._compute_alpha(rate, cutoff)
-
-        x_filtered = self._x_filter.filter(x, alpha)
-
-        self._t_prev = t
-        self._x_prev = x_filtered
-        return x_filtered
-
-    def reset(self) -> None:
-        self._x_filter.reset()
-        self._dx_filter.reset()
-        self._t_prev = None
-        self._x_prev = None
-
-
 class AdaptiveSmoother:
     """
-    2D cursor position stabilizer combining One-Euro filtering,
-    pixel deadzone, and smooth ease-in glide.
+    Fluid-damped pointer stabilizer.
     """
 
     def __init__(
         self,
-        min_cutoff: float = ONE_EURO_MIN_CUTOFF,
-        beta: float = ONE_EURO_BETA,
-        d_cutoff: float = ONE_EURO_D_CUTOFF,
-        deadzone_pixels: float = SMOOTH_DEADZONE_PIXELS,
+        base_damping: float = FLUID_BASE_DAMPING,
+        max_damping: float = FLUID_MAX_DAMPING,
+        soft_deadzone: float = FLUID_SOFT_DEADZONE,
     ) -> None:
-        self.filter_x = OneEuroFilter1D(min_cutoff, beta, d_cutoff)
-        self.filter_y = OneEuroFilter1D(min_cutoff, beta, d_cutoff)
-        self.deadzone_pixels = float(deadzone_pixels)
+        self.base_damping = float(base_damping)
+        self.max_damping = float(max_damping)
+        self.soft_deadzone = float(soft_deadzone)
 
-        self._history: list[Tuple[float, float]] = []
         self._current_x: Optional[float] = None
         self._current_y: Optional[float] = None
+        self._prev_time: Optional[float] = None
         self._is_tracking: bool = False
 
     def update(
@@ -138,53 +53,57 @@ class AdaptiveSmoother:
         timestamp_s: Optional[float] = None,
     ) -> Tuple[float, float]:
         """
-        Smooth a 2D position input using multi-stage stabilization:
-          Stage 1: 3-frame rolling average (absorbs MediaPipe sub-pixel jitter)
-          Stage 2: Stationary deadzone (locks pointer when holding still on an icon)
-          Stage 3: One-Euro velocity-adaptive filter (dynamic responsive smoothing)
+        Smooth a 2D position input using continuous exponential damping
+        and cubic Hermite soft-deadzone attenuation.
+
+        Args:
+            raw_x, raw_y: Target coordinates (in screen pixels).
+            timestamp_s: Optional monotonic timestamp in seconds.
+
+        Returns:
+            (smooth_x, smooth_y): Liquid-smooth coordinates.
         """
         t = timestamp_s if timestamp_s is not None else time.monotonic()
 
-        # Stage 1: Rolling average pre-filter
-        self._history.append((raw_x, raw_y))
-        if len(self._history) > 3:
-            self._history.pop(0)
-
-        target_x = sum(p[0] for p in self._history) / len(self._history)
-        target_y = sum(p[1] for p in self._history) / len(self._history)
-
-        # Initial frame or recovery from tracking loss
-        if self._current_x is None or self._current_y is None:
-            self._current_x = target_x
-            self._current_y = target_y
-            self.filter_x.filter(target_x, t)
-            self.filter_y.filter(target_y, t)
+        # 1. Initial frame
+        if self._current_x is None or self._current_y is None or self._prev_time is None:
+            self._current_x = raw_x
+            self._current_y = raw_y
+            self._prev_time = t
             self._is_tracking = True
-            return target_x, target_y
+            return raw_x, raw_y
 
-        # If tracking was briefly paused, smoothly glide towards new target
+        dt = max(1e-4, min(0.08, t - self._prev_time))
+        self._prev_time = t
+
+        # Recovery from pause (smooth ease-in rather than jumping)
         if not self._is_tracking:
-            self._current_x += (target_x - self._current_x) * SMOOTH_EASE_IN_RATE
-            self._current_y += (target_y - self._current_y) * SMOOTH_EASE_IN_RATE
-            self.filter_x.reset()
-            self.filter_y.reset()
-            self.filter_x.filter(self._current_x, t)
-            self.filter_y.filter(self._current_y, t)
+            self._current_x += (raw_x - self._current_x) * SMOOTH_EASE_IN_RATE
+            self._current_y += (raw_y - self._current_y) * SMOOTH_EASE_IN_RATE
             self._is_tracking = True
             return self._current_x, self._current_y
 
-        # Stage 2: Pixel deadzone (eradicates physiological hand tremor)
-        dist = math.hypot(target_x - self._current_x, target_y - self._current_y)
-        if dist < self.deadzone_pixels:
-            return self._current_x, self._current_y
+        dx = raw_x - self._current_x
+        dy = raw_y - self._current_y
+        dist = math.hypot(dx, dy)
 
-        # Stage 3: One-Euro dynamic filter
-        smooth_x = self.filter_x.filter(target_x, t)
-        smooth_y = self.filter_y.filter(target_y, t)
+        # 2. Soft Hermite attenuation (kills micro-tremor without sticky threshold)
+        if dist < self.soft_deadzone:
+            s = dist / max(self.soft_deadzone, 1e-4)
+            atten = s * s * (3.0 - 2.0 * s)  # Smooth cubic S-curve
+            dx *= atten
+            dy *= atten
 
-        self._current_x = smooth_x
-        self._current_y = smooth_y
-        return smooth_x, smooth_y
+        # 3. Velocity-adaptive damping: faster sweeps get higher damping to eliminate lag
+        speed_factor = min(1.0, dist / 80.0)
+        damping = self.base_damping + (self.max_damping - self.base_damping) * speed_factor
+
+        # 4. Continuous exponential glide
+        decay = 1.0 - math.exp(-damping * dt)
+        self._current_x += dx * decay
+        self._current_y += dy * decay
+
+        return self._current_x, self._current_y
 
     def pause(self) -> None:
         """Mark tracking as briefly paused so next update eases in rather than jumping."""
@@ -194,7 +113,5 @@ class AdaptiveSmoother:
         """Completely reset all smoother history."""
         self._current_x = None
         self._current_y = None
+        self._prev_time = None
         self._is_tracking = False
-        self._history.clear()
-        self.filter_x.reset()
-        self.filter_y.reset()

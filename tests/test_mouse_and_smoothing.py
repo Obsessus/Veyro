@@ -17,29 +17,28 @@ class TestAdaptiveSmoother:
 
     def test_deadzone_suppresses_micro_jitter(self):
         smoother = AdaptiveSmoother()
-        smoother.update(500.0, 300.0)
+        smoother.update(500.0, 300.0, timestamp_s=0.0)
 
-        # Small micro-movement below SMOOTH_DEADZONE
-        x_micro, y_micro = smoother.update(500.0005, 300.0005)
-        assert x_micro == 500.0
-        assert y_micro == 300.0
+        # Small micro-movement below deadzone
+        x_micro, y_micro = smoother.update(500.0005, 300.0005, timestamp_s=0.033)
+        assert abs(x_micro - 500.0) < 1e-4
+        assert abs(y_micro - 300.0) < 1e-4
 
     def test_adaptive_smoothing_gradual_convergence(self):
         smoother = AdaptiveSmoother()
-        smoother.update(100.0, 100.0)
+        smoother.update(100.0, 100.0, timestamp_s=0.0)
 
-        # Move to 200.0, 200.0
-        x1, y1 = smoother.update(200.0, 200.0)
-        # Should be between 100 and 200 (smoothed)
+        # Move to 200.0, 200.0 at 30fps
+        x1, y1 = smoother.update(200.0, 200.0, timestamp_s=0.033)
         assert 100.0 < x1 < 200.0
         assert 100.0 < y1 < 200.0
 
-        # After several frames of holding at 200, converges within deadzone radius of 200
-        for _ in range(30):
-            x1, y1 = smoother.update(200.0, 200.0)
+        # After several frames at 30fps (approx 1 second), smoothly converges to target
+        for i in range(2, 35):
+            x1, y1 = smoother.update(200.0, 200.0, timestamp_s=i * 0.033)
 
-        assert abs(x1 - 200.0) <= smoother.deadzone_pixels
-        assert abs(y1 - 200.0) <= smoother.deadzone_pixels
+        assert abs(x1 - 200.0) < 1.0
+        assert abs(y1 - 200.0) < 1.0
 
     def test_reset_clears_state(self):
         smoother = AdaptiveSmoother()

@@ -44,26 +44,22 @@ MIN_DETECTION_CONFIDENCE: float = 0.7
 MIN_TRACKING_CONFIDENCE: float = 0.6
 
 # ──────────────────────────────────────────────
-# SMOOTHING (Cursor Jitter Elimination & Butter-Smooth Tracking)
+# SMOOTHING (Fluid Glide Damping & Anti-Lag Engine)
 # ──────────────────────────────────────────────
 
-# One-Euro Filter Parameters:
-# Lower MIN_CUTOFF = heavier smoothing when stationary (eradicates hand tremor).
-ONE_EURO_MIN_CUTOFF: float = 0.4
+# Base damping rate (fluidity at low speed).
+# Higher = snappier, Lower = more floaty/animated glide.
+FLUID_BASE_DAMPING: float = 22.0
 
-# BETA: Velocity coefficient. Higher = zero lag during fast movement.
-ONE_EURO_BETA: float = 0.025
+# Max damping rate during fast sweeps (eliminates input lag entirely).
+FLUID_MAX_DAMPING: float = 42.0
 
-# D_CUTOFF (Hz): Cutoff frequency for velocity derivative calculation.
-ONE_EURO_D_CUTOFF: float = 1.0
-
-# Stationary Deadzone (in screen pixels):
-# Micro-movements within this radius (14px) are completely filtered out,
-# ensuring the cursor stays rock-solid when holding still on an icon.
-SMOOTH_DEADZONE_PIXELS: float = 14.0
+# Soft Deadzone (Hermite attenuation radius in pixels):
+# Micro-movements within this radius are softly smoothed out without a sticky wall.
+FLUID_SOFT_DEADZONE: float = 7.0
 
 # Smooth transition factor when hand first appears (prevents jumping)
-SMOOTH_EASE_IN_RATE: float = 0.25
+SMOOTH_EASE_IN_RATE: float = 0.30
 
 # ──────────────────────────────────────────────
 # SCREEN MAPPING
