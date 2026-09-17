@@ -36,7 +36,8 @@ ENV/
 Thumbs.db
 desktop.ini
 
-# MediaPipe model files (downloaded at runtime)
+# MediaPipe model files (downloaded at runtime, not committed)
+models/
 *.task
 *.tflite
 
